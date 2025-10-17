@@ -8,10 +8,12 @@ from tkinter import filedialog
 root = tkinter.Tk()
 root.title("Registration")
 
-#Ask user for directory
+#Ask user for directory to images 
 root.withdraw()
 path = filedialog.askdirectory()
 root.deiconify()
+root.geometry("400x200")
+root.resizable(True, True)
 
 #project folder configurations
 project_folder = list(Path(path).glob("*.ome.tif")) + list(Path(path).glob("*.btf"))
@@ -20,20 +22,32 @@ pattern = re.compile(r"(.+?_.+?)_(.+?)_(.+?\.ome\.tif|.+?\.btf)$")
 fixed_image_pattern = "stained"
 
 #setting up tkinter progress bar
+status_label = tkinter.Label(root, text = f"Starting registration in folder {Path(path).name}...")
+status_label.grid(row=0, column=0, columnspan=2, padx=10, sticky="w")
+
 progress_bar_fixed = ttk.Progressbar(root, orient="horizontal", length = 200, mode = 'determinate', takefocus=True, maximum = 1)
+progress_bar_fixed['value']=0
 
 progress_bar_mods = ttk.Progressbar(root, orient="horizontal", length = 200, mode = 'determinate', takefocus=True, maximum = 1)
-
-status_label = tkinter.Label(root, text = f"Starting registration in folder {Path(path).name}...")
-progress_bar_fixed['value']=0
 progress_bar_mods['value']=0
-progress_bar_fixed.pack()
-progress_bar_mods.pack()
-status_label.pack()
-#Note to self: is it possible to have a cancel in the progress bar?
+
+progress_bar_steps = ttk.Progressbar(root, orient="horizontal", length = 200, mode = 'determinate', takefocus=True, maximum = 3)
+progress_bar_steps['value']=0
+
+cancel_button = ttk.Button(root, text = "Cancel", command = exit)
+
+for i, (label_text, bar) in enumerate([
+    ("Slides to be registered", progress_bar_fixed),
+    ("Adding cycles to registration", progress_bar_mods),
+    ("Registration steps", progress_bar_steps)
+]):
+    tkinter.Label(root, text=label_text).grid(row=i+1, column=0, padx=10, pady=5, sticky="w")
+    bar.grid(row=i+1, column=1, padx=10, pady=5)
+
+cancel_button.grid(row=4, column=1, padx=10, pady=5)
 root.update_idletasks()
 
-#Starting registration
+#Sorting up image cycles 
 for file in project_folder:
     match = pattern.match(file.name)
     slide, cycle, end = match.groups()
@@ -47,9 +61,11 @@ progress_bar_fixed["maximum"] = len(image_dict.keys())
 from wsireg import WsiReg2D
 def run_registration():
     for slide, slide_images in image_dict.items():
+        #Updating tkinter GUI
         status_label.config(text = f"Processing slide: {slide}")
         progress_bar_mods['value']=0
         progress_bar_mods["maximum"] = len(slide_images)
+        root.after(20)
         root.update_idletasks()
 
         fixed_image = next((file for file in slide_images if fixed_image_pattern in file.name), None)
@@ -107,14 +123,19 @@ def run_registration():
         root.update_idletasks()
 
         reg_graph.add_merge_modalities("registered", cycle_list)
+        progress_bar_steps['value'] += 1
+        root.update_idletasks()
+
         reg_graph.register_images()
+        progress_bar_steps['value'] += 1
+        root.update_idletasks()
+        
         reg_graph.save_transformations()
-        reg_graph.transform_images(file_writer="ome.tif", remove_merged=False)
-        
-        
+        reg_graph.transform_images(file_writer="ome.tif", remove_merged=True)
+        progress_bar_steps['value'] += 1
         progress_bar_fixed['value']+=1
         root.update_idletasks()
 
-progress_bar_fixed['value']+=1
 root.after(100, run_registration)
 root.mainloop()
+progress_bar_fixed['value']+=1
