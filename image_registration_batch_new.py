@@ -56,10 +56,10 @@ progress_bar_fixed["maximum"] = len(image_dict.keys())
 fixed_label.config(text = f"Slides to be registered 0/{len(image_dict.keys())}")
 
 from wsireg import WsiReg2D
-from wsireg.reg_images.tifffile_reg_image import TiffFileRegImage
 def run_registration():
     for index, (slide, slide_images) in enumerate(image_dict.items()):
         #Updating tkinter GUI
+        cycle_list = []
         status_label.config(text = f"Processing slide: {slide}")
         step_label.config(text = "Performing registration step (0/4)}")
         root.after(20)
@@ -71,8 +71,7 @@ def run_registration():
         if fixed_image==None:
             continue
         
-        cycle_list = {}
-        cycle_list[fixed_image_pattern] = ["DAPI","FITC", "Cy5", "Cy3N"]
+        cycle_list.append(fixed_image_pattern)
 
         #Adding the fixed image
         reg_graph.add_modality(
@@ -92,7 +91,7 @@ def run_registration():
         for modality in slide_images :
             if modality != fixed_image:
                 slide, cycle, end  = pattern.match(modality.name).groups()
-                cycle_list[cycle] = ["FITC", "Cy5", "Cy3N"]
+                cycle_list.append(cycle)
 
                 reg_graph.add_modality(
                     cycle,
@@ -120,7 +119,7 @@ def run_registration():
         step_label.config(text = "Performing registration step (1/4)}")
         root.update_idletasks()
 
-        reg_graph.add_merge_modalities("registered", list(cycle_list.keys()))
+        reg_graph.add_merge_modalities("registered", cycle_list)
         progress_bar_steps['value'] += 1
         step_label.config(text = "Performing registration step (2/4)}")
         root.update_idletasks()
@@ -131,9 +130,6 @@ def run_registration():
         root.update_idletasks()
 
         reg_graph.save_transformations()
-        print(reg_graph.modalities.keys())
-        print(reg_graph.merge_modalities)
-        print(cycle_list)
 
         reg_graph.transform_images(file_writer="ome.tif", remove_merged=True, channel_indices = {"stained":[0,1,2,3], "AF":[1,2,3]})
         progress_bar_steps['value'] += 1
