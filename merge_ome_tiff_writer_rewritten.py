@@ -237,7 +237,7 @@ class MergeOmeTiffWriter:
             self.PhysicalSizeX = reg_image.image_res
 
         channel_names = format_channel_names(
-            self.reg_image.channel_names, self.reg_image.n_ch
+            self.reg_image.channel_names, len(self.reg_image.channel_names)
         )
 
         self.omexml = prepare_ome_xml_str(
