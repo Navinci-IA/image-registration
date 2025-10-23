@@ -1134,7 +1134,7 @@ class WsiReg2D(object):
 
                 transformations.append(sub_im_transforms)
 
-        output_path = self.output_dir / "{}-{}_merged-registered".format(
+        output_path = self.output_dir / "{}-{}".format( #changed to not be named merge-registered
             self.project_name,
             merge_name,
         )
@@ -1149,6 +1149,7 @@ class WsiReg2D(object):
             merge_regimage, reg_transform_seqs=transformations
         )
 
+        #using a new function that output
         im_fp = merge_ometiffwriter.merge_write_image_by_plane_new(
             output_path.stem,
             sub_images,
@@ -1269,6 +1270,7 @@ class WsiReg2D(object):
                 image_fps.append(im_fp)
 
             if len(self.merge_modalities.items()) > 0:
+                #Returning two images instead of one, which is only defined by the _transform_write_merge_images 
                 im_fp, im_dapi = self._transform_write_merge_images(
                     to_original_size=to_original_size
                 )

@@ -118,17 +118,17 @@ class MergeOmeTiffWriter:
         """Create channel names for merge data."""
 
         def prepare_channel_names(sub_image_name, channel_names):
-            return f"{sub_image_name} - {channel_names[0]}" 
+            return [f"{sub_image_name} - {channel_names[0]}"] 
 
-        self.reg_image.channel_names = [
+        self.reg_image.channel_names_DAPI = [
             prepare_channel_names(im_name, cnames)
             for im_name, cnames in zip(
                 sub_image_names, self.reg_image.channel_names
             )
         ]
-        self.reg_image.channel_names = [
+        self.reg_image.channel_names_DAPI = [
             item
-            for sublist in self.reg_image.channel_names
+            for sublist in self.reg_image.channel_names_DAPI
             for item in sublist
         ]
 
@@ -137,24 +137,22 @@ class MergeOmeTiffWriter:
 
         def prepare_channel_names_new(index, sub_image_name, channel_names):
             if index == 0:
-                return [f"{sub_image_name} - {c}" for c in channel_names]
+                return [c for c in channel_names]
             else:
-                return [f"{sub_image_name} - {c}" for c in channel_names[1:]]
+                return [c for c in channel_names[1:]]
 
-        self.reg_image.channel_names = [
+        self.reg_image.channel_names_new = [
             prepare_channel_names_new(index, im_name, cnames)
             for (index, im_name), cnames in zip(
                 enumerate(sub_image_names), self.reg_image.channel_names
             )
         ]
 
-        print(self.reg_image.channel_names)
-        self.reg_image.channel_names = [
+        self.reg_image.channel_names_new = [
             item
-            for sublist in self.reg_image.channel_names
+            for sublist in self.reg_image.channel_names_new
             for item in sublist
         ]
-        print(self.reg_image.channel_names)
 
     def _transform_check(self):
         """Check that all transforms as currently loaded output to the same size/resolution"""
@@ -190,6 +188,7 @@ class MergeOmeTiffWriter:
                 "MergeRegImage all transforms output sizes and untransformed image sizes must match"
             )
 
+
     def _prepare_image_info(
         self,
         reg_image: RegImage,
@@ -199,6 +198,7 @@ class MergeOmeTiffWriter:
         write_pyramid: bool = True,
         tile_size: int = 512,
         compression: str = "default",
+        channel_names = None,
     ):
         """Prepare OME-XML and other data needed for saving"""
 
@@ -236,10 +236,11 @@ class MergeOmeTiffWriter:
             self.PhysicalSizeY = reg_image.image_res
             self.PhysicalSizeX = reg_image.image_res
 
-        channel_names = format_channel_names(
-            self.reg_image.channel_names, len(self.reg_image.channel_names)
-        )
-
+        if channel_names == None: 
+            channel_names = format_channel_names(
+                self.reg_image.channel_names, len(self.reg_image.channel_names)
+            )
+        
         self.omexml = prepare_ome_xml_str(
             self.y_size,
             self.x_size,
@@ -320,7 +321,6 @@ class MergeOmeTiffWriter:
         self._length_checks(sub_image_names)
         self._create_channel_names_new(sub_image_names)
         self._transform_check()
-
         output_file_name = str(Path(output_dir) / f"{image_name}.ome.tiff")
 
         self._prepare_image_info(
@@ -331,12 +331,14 @@ class MergeOmeTiffWriter:
             write_pyramid=write_pyramid,
             tile_size=tile_size,
             compression=compression,
+            channel_names=self.reg_image.channel_names_new
         )
 
         print(f"saving to {output_file_name}")
         with TiffWriter(output_file_name, bigtiff=True) as tif:
             for m_idx, merge_image in enumerate(self.reg_image.images):
                 if self.reg_image.images[m_idx].reader == "sitk": 
+                    print("Warning, the image is read as sitk Frida ")
                     full_image = sitk.ReadImage(
                         self.reg_image.images[m_idx].image_filepath
                     )
@@ -469,6 +471,7 @@ class MergeOmeTiffWriter:
             write_pyramid=write_pyramid,
             tile_size=tile_size,
             compression=compression,
+            channel_names=self.reg_image.channel_names_DAPI
         )
 
         print(f"saving to {output_file_name}")
