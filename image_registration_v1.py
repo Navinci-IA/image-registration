@@ -15,27 +15,7 @@ root.resizable(True, True)
 
 #project folder configurations
 project_folder = list(Path(path).glob("*.vsi"))
-"""
-#setting up tkinter progress bar
-status_label = tk.Label(root, text = f"Starting registration in folder {Path(path).name}...")
-status_label.grid(row=0, column=0, columnspan=2, padx=10, sticky="w")
 
-progress_bar_fixed = ttk.Progressbar(root, orient="horizontal", length = 200, mode = 'determinate', takefocus=True, maximum = 1)
-progress_bar_fixed['value']=0
-fixed_label = tk.Label(root, text="Slides to be registered")
-fixed_label.grid(row=1, column=0, padx=10, pady=5, sticky="w")
-progress_bar_fixed.grid(row=1, column=1, padx=10, pady=5)
-
-progress_bar_steps = ttk.Progressbar(root, orient="horizontal", length = 200, mode = 'determinate', takefocus=True, maximum = 4)
-progress_bar_steps['value']=0
-step_label = tk.Label(root, text="Performing registration step (0/4)")
-step_label.grid(row=3, column=0, padx=10, pady=5, sticky="w")
-progress_bar_steps.grid(row=3, column=1, padx=10, pady=5)
-
-cancel_button = ttk.Button(root, text = "Cancel", command = exit)
-cancel_button.grid(row=4, column=1, padx=10, pady=5)
-root.update_idletasks()
-"""
 images = {}
 #Sorting up image cycles 
 for vsi_file in project_folder:
@@ -63,7 +43,6 @@ def submit():
     root.destroy()
 
 # Create checkboxes
-
 for img_name, tifs in images.items():
     frame = ttk.LabelFrame(root, text=img_name)
     frame.pack(fill="x", padx=10, pady=5)
@@ -85,6 +64,7 @@ target_names = {
 }
 
 channels = ["DAPI", "Cy5", "Cy3N", "FITC"]
+
 channel_names = {}
 for cycle_index, targets in target_names.items():
     channel_names[cycle_index] = [
@@ -172,3 +152,108 @@ def choose_channels():
     ttk.Button(root, text="Submit", command=submit_all).pack(pady=10)
     root.mainloop()
 
+#setting up tkinter progress bar
+root = tk.Tk()
+root.title("Registration")
+status_label = tk.Label(root, text = f"Starting registration in folder {Path(path).name}...")
+status_label.grid(row=0, column=0, columnspan=2, padx=10, sticky="w")
+
+progress_bar_fixed = ttk.Progressbar(root, orient="horizontal", length = 200, mode = 'determinate', takefocus=True, maximum = 1)
+progress_bar_fixed['value']=0
+fixed_label = tk.Label(root, text="Slides to be registered")
+fixed_label.grid(row=1, column=0, padx=10, pady=5, sticky="w")
+progress_bar_fixed.grid(row=1, column=1, padx=10, pady=5)
+
+progress_bar_steps = ttk.Progressbar(root, orient="horizontal", length = 200, mode = 'determinate', takefocus=True, maximum = 4)
+progress_bar_steps['value']=0
+step_label = tk.Label(root, text="Performing registration step (0/4)")
+step_label.grid(row=3, column=0, padx=10, pady=5, sticky="w")
+progress_bar_steps.grid(row=3, column=1, padx=10, pady=5)
+
+cancel_button = ttk.Button(root, text = "Cancel", command = exit)
+cancel_button.grid(row=4, column=1, padx=10, pady=5)
+root.update_idletasks()
+
+reg_path = path/"registration"
+if not reg_path.exists(): os.mkdir(reg_path)
+
+from wsireg import WsiReg2D
+def run_registration():
+    for index, (slide_name, slide_dictionary) in enumerate(images.items()):
+        #Updating tkinter GUI
+        status_label.config(text = f"Processing slide: {slide_name}")
+        step_label.config(text = "Performing registration step (0/4)}")
+        root.after(20)
+        root.update_idletasks()
+
+        fixed_cycle_name, fixed_cycle_info = slide_dictionary[slide_dictionary["fixed cycle"]].items()
+        reg_graph = WsiReg2D(slide_name, reg_path)
+
+        #Adding the fixed image
+        reg_graph.add_modality(
+            fixed_cycle_name,
+            fixed_cycle_info["path"],
+            image_res=0.325,
+            channel_names = fixed_cycle_info["channel list"],
+            preprocessing= {
+                "image_type" : "FL",
+                "ch_indices": [0],
+                "asuint8": True,
+                "contrast_enhance" : True,
+                "downsampling": 2,
+            },
+        )
+
+        for modality_name, modality_info in slide_dictionary :
+            if modality_name != fixed_cycle_name:
+
+                reg_graph.add_modality(
+                    modality_name,
+                    modality_info["path"],
+                    image_res=0.325,
+                    channel_names = modality_info["channel list"],
+                    preprocessing= {
+                        "image_type" : "FL",
+                        "ch_indices": [0],
+                        "asuint8": True,
+                        "contrast_enhance" : True,
+                        "downsampling": 2,
+                    },
+                )
+
+                reg_graph.add_reg_path(
+                    modality_name,
+                    fixed_cycle_name,
+                    thru_modality=None,
+                    reg_params=["rigid", "affine", "nl"]
+                )
+                
+        progress_bar_steps['value'] += 1
+        step_label.config(text = "Performing registration step (1/4)}")
+        root.update_idletasks()
+
+        reg_graph.add_merge_modalities("registered", sorted(slide_dictionary.keys()))
+        progress_bar_steps['value'] += 1
+        step_label.config(text = "Performing registration step (2/4)}")
+        root.update_idletasks()
+
+        reg_graph.register_images()
+        progress_bar_steps['value'] += 1
+        step_label.config(text = "Performing registration step (3/4)}")
+        root.update_idletasks()
+
+        reg_graph.save_transformations()
+
+        reg_graph.transform_images(file_writer="ome.tif", remove_merged=True)
+        progress_bar_steps['value'] += 1
+        step_label.config(text = "Performing registration step (4/4)}")
+        progress_bar_fixed['value']+=1
+        fixed_label.config(text = f"Slides to be registered {index+1}/{len(slide_dictionary.keys())}")
+        root.after(20)
+        root.update_idletasks()
+
+
+root.after(100, run_registration)
+root.mainloop()
+progress_bar_fixed['value']+=1
+root.destroy()
