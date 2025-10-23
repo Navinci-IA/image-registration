@@ -63,8 +63,7 @@ def submit():
     root.destroy()
 
 # Create checkboxes
-#checkbox_frame = tk.Toplevel(root)
-#checkbox_frame.title("Select stacks")
+
 for img_name, tifs in images.items():
     frame = ttk.LabelFrame(root, text=img_name)
     frame.pack(fill="x", padx=10, pady=5)
@@ -98,8 +97,10 @@ channel_names["Autofluorescence"] = [f"{ch}_Autofluroescence" for ch in channels
 root = tk.Tk()
 root.title("Select channel lists for all cycles")
 
+
 def choose_channels():
     selections = {}
+    fixed_cycle_vars = {}
 
     def update_display(event, combo, label):
         selected_key = combo.get()
@@ -109,11 +110,22 @@ def choose_channels():
         else:
             label.config(text="")
 
-    row = 0
     for img_name, cycles in images.items():
-        # Image title
         img_frame = ttk.LabelFrame(root, text=f"Image: {img_name}")
         img_frame.pack(fill="x", padx=10, pady=5)
+
+        # Fixed cycle dropdown for this image
+        tk.Label(img_frame, text="Choose fixed cycle for registration", font=("Arial", 10, "bold")).pack(anchor="w", padx=5)
+
+        cycle_names = list(cycles.keys())
+        fixed_cycle_var = tk.StringVar()
+        fixed_cycle_combo = ttk.Combobox(img_frame, textvariable=fixed_cycle_var, values=cycle_names, state="readonly", width=30)
+        fixed_cycle_combo.pack(pady=(0, 10), padx=5, anchor="w")
+
+        # Set default to first cycle
+        if cycle_names and len(cycle_names)>1:
+            fixed_cycle_var.set(cycle_names[1])
+        fixed_cycle_vars[img_name] = fixed_cycle_var
 
         for cycle_name in cycles:
             frame = tk.Frame(img_frame)
@@ -134,8 +146,17 @@ def choose_channels():
 
     def submit_all():
         for img_name in images:
+            fixed_cycle = fixed_cycle_vars[img_name].get()
+            if not fixed_cycle:
+                tk.messagebox.showerror("Missing Selection", f"Please select a fixed cycle for image '{img_name}'.")
+                return
+            images[img_name]["fixed cycle"] = fixed_cycle
+            print(f"Fixed cycle for {img_name}: {fixed_cycle}")
+
             used_keys = set()
             for cycle_name in images[img_name]:
+                if cycle_name == "fixed cycle":
+                    continue
                 selected_key = selections[(img_name, cycle_name)].get()
                 if not selected_key:
                     tk.messagebox.showerror("Missing Selection", f"No channel list selected for {img_name} - {cycle_name}")
@@ -145,17 +166,9 @@ def choose_channels():
                     return
                 used_keys.add(selected_key)
                 images[img_name][cycle_name]["channel list"] = channel_names[selected_key]
+
         root.destroy()
 
     ttk.Button(root, text="Submit", command=submit_all).pack(pady=10)
     root.mainloop()
 
-choose_channels()
-"""
-for im, cycles in images.items():
-    print(im)
-    for cs, info in cycles.items():
-        print("\t", cs)
-        for keys, values in info.items():
-            print("\t", "\t", keys, values)
-"""
