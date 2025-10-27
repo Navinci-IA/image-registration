@@ -199,6 +199,7 @@ class MergeOmeTiffWriter:
         tile_size: int = 512,
         compression: str = "default",
         channel_names = None,
+        downsample = 1,
     ):
         """Prepare OME-XML and other data needed for saving"""
 
@@ -212,8 +213,8 @@ class MergeOmeTiffWriter:
                 else (reg_image.shape[1], reg_image.shape[2])
             )
             self.y_spacing, self.x_spacing = (
-                reg_image.image_res,
-                reg_image.image_res,
+                reg_image.image_res * downsample,
+                reg_image.image_res * downsample,
             )
 
         self.tile_size = tile_size
@@ -460,7 +461,7 @@ class MergeOmeTiffWriter:
         self._length_checks(sub_image_names)
         self._create_channel_names_DAPI(sub_image_names)
         self._transform_check()
-
+        downsample = 2
         output_file_name = str(Path(output_dir) / f"{image_name}_DAPI.ome.tiff")
 
         self._prepare_image_info(
@@ -471,7 +472,8 @@ class MergeOmeTiffWriter:
             write_pyramid=write_pyramid,
             tile_size=tile_size,
             compression=compression,
-            channel_names=self.reg_image.channel_names_DAPI
+            channel_names=self.reg_image.channel_names_DAPI,
+            downsample = downsample
         )
 
         print(f"saving to {output_file_name}")
@@ -482,16 +484,24 @@ class MergeOmeTiffWriter:
                         self.reg_image.images[m_idx].image_filepath
                     )
 
+                new_size = (
+                    int(image.shape[1]) /downsample,
+                    int(image.shape[0]) /downsample,
+                )
                 if self.reg_image.images[m_idx].reader != "sitk":
-                    image = self.reg_image.images[
-                        m_idx
-                    ].read_single_channel(0)
+                    image = cv2.resize(
+                        self.reg_image.images[
+                            m_idx
+                        ].read_single_channel(0),
+                        new_size,
+                        interpolation=cv2.INTER_LINEAR
+                    )
                     image = np.squeeze(image)
                     image = sitk.GetImageFromArray(image)
                     image.SetSpacing(
                         (
-                            self.reg_image.images[m_idx].image_res,
-                            self.reg_image.images[m_idx].image_res,
+                            self.reg_image.images[m_idx].image_res*2,
+                            self.reg_image.images[m_idx].image_res*2,
                         )
                     )
 
